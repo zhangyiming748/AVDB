@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/anaskhan96/soup"
+	"avdb/storage"
 )
 
 var (
@@ -79,7 +80,7 @@ func createProxyClient(proxyURL string) (*http.Client, error) {
 }
 
 func Javdb(keyword string) (string, error) {
-	soup.SetDebug(true)
+	//soup.SetDebug(true)
 	// 创建带代理和 cookie jar 的客户端
 	client, err := createProxyClient(proxy)
 	if err != nil {
@@ -110,7 +111,44 @@ func Javdb(keyword string) (string, error) {
 		}
 	}
 	root := soup.HTMLParse(resp)
-	log.Printf("root is : %v\n", root)
+	//log.Printf("root is : %v\n", root)
+//<div class="item">
+	items := root.FindAll("div", "class", "item")
+	log.Printf("found %d items\n", len(items))
+	for i, item := range items {
+		log.Printf("item %d: %v\n", i, item)
+		videoTitleDiv := item.Find("div", "class", "video-title")
+		if videoTitleDiv.Pointer != nil {
 
-	return resp, nil
+			titleText := videoTitleDiv.Text()
+			log.Printf("完整标题行: %v\n", titleText)
+
+			// 查找 strong 标签获取番号
+			strongTag := videoTitleDiv.Find("strong")
+			if strongTag.Pointer != nil {
+				idNumber := strongTag.Text()
+				log.Printf("番号: %v\n", idNumber)
+
+				// 提取标题部分（去掉番号的部分）
+				titleWithoutId := strings.TrimSpace(strings.TrimPrefix(titleText, idNumber))
+				log.Printf("标题: %v\n", titleWithoutId)
+				avdb := storage.AVDB{
+					NO: idNumber,
+					Title: titleWithoutId,
+				}
+				log.Printf("准备插入数据库的AVDB: %+v\n", avdb)
+				err := avdb.Insert()
+				if err != nil {
+					log.Printf("插入数据库失败: %v\n", err)
+				} else {
+					log.Printf("插入数据库成功: %+v\n", avdb)
+				}
+			} else {
+				log.Printf("未找到番号\n")
+			}
+		} else {
+			log.Printf("未找到 video-title 元素\n")
+		}
+	}
+	return "", nil
 }
